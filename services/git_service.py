@@ -43,21 +43,30 @@ class GitActivityAnalyzer:
             return []
 
         author_email = self._settings.author_email or self._repo_user_email(repo)
-        branch = self._current_branch(repo)
         repo_name = repo_path.name
 
+        # Scan every local branch, not just the one currently checked out -- work done on a
+        # branch earlier today should still show up even after switching to another branch.
         # Deliberately not using git's --since/--until: their revision walk assumes commit
         # dates increase monotonically while walking the graph and can silently skip commits
         # after a rebase, cherry-pick, or backdated commit. A full scan is the correct one.
         results: list[Commit] = []
-        for git_commit in repo.iter_commits(branch):
-            commit_dt = git_commit.committed_datetime
-            if commit_dt.date() != target_date:
-                continue
-            if author_email and git_commit.author.email != author_email:
-                continue
+        seen_hashes: set[str] = set()
+        for branch in self._local_branch_names(repo):
+            for git_commit in repo.iter_commits(branch):
+                if git_commit.hexsha in seen_hashes:
+                    # Already walked this commit (and therefore all of its ancestors, since
+                    # that earlier walk was unbounded) via a previous branch. Safe to stop.
+                    break
+                seen_hashes.add(git_commit.hexsha)
 
-            results.append(self._to_commit(git_commit, repo_name, branch, commit_dt))
+                commit_dt = git_commit.committed_datetime
+                if commit_dt.date() != target_date:
+                    continue
+                if author_email and git_commit.author.email != author_email:
+                    continue
+
+                results.append(self._to_commit(git_commit, repo_name, branch, commit_dt))
         return results
 
     def _to_commit(self, git_commit, repo_name: str, branch: str, commit_dt: datetime) -> Commit:
@@ -102,11 +111,9 @@ class GitActivityAnalyzer:
         return result
 
     @staticmethod
-    def _current_branch(repo: Repo) -> str:
-        try:
-            return repo.active_branch.name
-        except TypeError:
-            return "detached-head"
+    def _local_branch_names(repo: Repo) -> list[str]:
+        names = [head.name for head in repo.heads]
+        return names or ["HEAD"]  # detached HEAD with no local branches at all
 
     @staticmethod
     def _repo_user_email(repo: Repo) -> str | None:
