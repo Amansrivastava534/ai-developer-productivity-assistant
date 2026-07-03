@@ -1,0 +1,27 @@
+ollama:
+  base_url: "http://localhost:11434"
+  model: "llama3.2:latest"   # swap for qwen2.5-coder:7b, deepseek-coder, mistral, codellama, etc.
+  timeout_seconds: 120
+
+git:
+  repositories:
+    - /path/to/your/repo-1
+    - /path/to/your/repo-2
+  author_email: null   # null = use each repo's `git config user.email`
+
+database:
+  path: "database/assistant.db"
+
+reports:
+  output_dir: "reports"
+
+logging:
+  level: "INFO"
+  file: "logs/assistant.log"
+
+productivity:
+  weights:
+    commits: 0.25
+    lines_changed: 0.25
+    files_modified: 0.2
+    active_hours: 0.3
